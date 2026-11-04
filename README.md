@@ -1,31 +1,44 @@
-# Poker Bot: Model Overview
+# No Limit Poker Bot: Model Overview
 
-A No Limit Texas Hold'em tournament bot, built for the format of the No Limit poker-bot competition (Sequoia, OpenAI, Citadel Securities). This repository describes how the model works and how it performs. **The source code, trained thresholds and equity tables are private.**
+A bot built for **[No Limit](https://pokerbot.sequoiacap.com/)**, the student bot-building poker tournament run by Sequoia, OpenAI and Citadel Securities. This repository describes how the model works and how it scores in the competition's format. **The source code, trained thresholds and equity tables are private.**
 
-It is an interpretable decision-tree model. Every decision comes with a written trace explaining each step, and the trees' thresholds are tuned by simulated tournament play.
+It is an interpretable decision-tree model. Every decision comes with a written trace explaining each step, and the trees' thresholds are tuned by simulating the competition's scored tournaments.
 
-## Current results
+## Competition format
 
-As of stage 9, measured on [Poker Gym](https://github.com/mack-dot/poker-gym), an independent open-source rehearsal simulator with its own engine and sparring bots:
-
-| Metric | Value |
-|---|---|
-| Points per table, sparring lineup, 2,000 tables (field average 31.9) | **43.1** (95% CI 41.6–44.5) |
-| vs Poker Gym's TAG bot in the same seats | **+10.2** (95% CI +8.3 to +12.0) |
-| Ladder: 8 bots, 400 tables | **1st**, 45.4 (next best: 38.0) |
-| Table win rate / top-4 rate | 13.7% / 66.1% |
-| Heads-up vs each Poker Gym bot | wins 60–63% of matches |
-| Decisions over 1 ms / errors / illegal actions | 1 in 283,227 (under heavy machine load) / 0 / 0 |
-
-## Competition format it targets
+From the [official rules](https://pokerbot.sequoiacap.com/rules.html), with section numbers:
 
 | Rule | How the model handles it |
 |---|---|
-| 8-bot sit-and-gos, 2,000 chips, blinds rising every 25 hands | Every decision is scaled to the current blinds. Stack depth is measured in big blinds and against the table average. |
-| 200-hand cap, then ICM on survivors; points by finishing place | The fitness function used in training is this exact scoring. |
-| 1 ms per decision; errors or timeouts fold | Equity comes from precomputed lookup tables rather than live simulation. A typical decision takes about 0.05 ms. Any internal error falls back to check or fold. |
-| State resets per table, opponents anonymized | Opponent models are rebuilt from scratch at each table using only what is observed there. |
-| Secret poker variant | The hand-ranking order can be swapped and the equity tables rebuilt in about a minute. Tested under pot-limit and flush-beats-full-house rules. |
+| **Scored tournament** = 10,000 eight-bot sit-and-gos (4.3); six tournaments T1–T6, weighted 1–6 (4.1, 4.7) | Results below come from simulating exactly that: 10,000 tables per tournament, scored as average points per table, plus the weighted T1–T6 score. |
+| 2,000 chips, blinds start at 10/20 and rise every 25 hands; a table ends when one bot has every chip or after 200 hands (4.4) | Every decision is scaled to the current blinds. Stack depth is measured in big blinds and against the table average. |
+| Points by finishing place; at the 200-hand cap, the remaining points go to survivors by **ICM** (4.5) | Training optimizes this exact score, including Malmuth–Harville ICM at the cap. |
+| **1 ms per decision**; errors or timeouts fold, or check (3.7) | Equity comes from precomputed lookup tables, not live simulation. A typical decision takes about 0.05 ms. Any internal error falls back to check or fold. |
+| Bot state resets each table; opponents are anonymized (3.8) | Opponent models are rebuilt from scratch at each table using only what is seen there. |
+| Variant revealed at each build phase; **the Finals use a different variant** (3.2, 5.2) | The hand-ranking order can be swapped and the equity tables rebuilt in about a minute. Tested under pot-limit and flush-beats-full-house rules. |
+| Python Agent interface; no network; 100 MB limit; one submission every 5 minutes (3.3–3.7) | Standard-library Python only. The whole bot (code, tables and thresholds) is one file of about 165 KB, checked end to end in a clean interpreter before upload. |
+| Starter kit at the event: Agent template, local simulator, ICM calculator, payouts, blind schedule (3.3) | Points and later blind levels are placeholders until then. Retraining with the real ones takes about 10 minutes. |
+
+## Scored-tournament results
+
+Stage 9 bot. Each tournament is 10,000 simulated eight-bot sit-and-gos in the rules' format. Points use the placeholder table 100/60/40/25/15/10/5/0, where the field average is 31.9.
+
+| Opponent field | T1 | T2 | T3 | T4 | T5 | T6 | **Weighted score** | Outright wins |
+|---|---|---|---|---|---|---|---|---|
+| Rehearsal sparring bots: TAG, LAG, short-stack, ICM, adaptive, heuristic, random | 47.0 | 46.9 | 47.3 | 47.3 | 47.1 | 47.7 | **47.3** | 16.1% |
+| Archetype pool: rock, TAG, maniac, station, bluffer, push/fold, plus bot copies | 52.7 | 53.1 | 52.9 | 52.3 | 52.8 | 52.4 | **52.6** | 14.5% |
+| Mixed | 49.5 | 50.2 | 50.5 | 49.9 | 50.2 | 50.1 | **50.1** | 15.3% |
+
+The 95% CI for each tournament is about ±0.6 points. An average bot would score 31.9; first place every table would score 100.
+
+Head-to-head checks in the same format, using [Poker Gym](https://github.com/mack-dot/poker-gym), an open-source rehearsal simulator of the No Limit rules:
+
+| Check | Result |
+|---|---|
+| vs a tight-aggressive (TAG) reference bot in the same seats | **+10.2** points per table (95% CI +8.3 to +12.0) |
+| 8-bot ladder, 400 tables | **1st**, 45.4 (next best: 38.0) |
+| Heads-up endgames vs each reference bot | wins 60–63% |
+| Decisions over 1 ms / errors / illegal actions | 1 in 283,227 (under heavy machine load) / 0 / 0 |
 
 ## Architecture
 
@@ -147,12 +160,12 @@ Heads-up, facing a raise with A7o. The hand tree alone would fold this, but with
 
 The thresholds (49 of them) are tuned by an evolution strategy that plays complete tournaments.
 
-**Fitness:** average competition points per 8-bot table, with finishing-place points and ICM at the 200-hand cap.
+**Fitness:** the No Limit score itself, average points per 8-bot sit-and-go, with finishing-place points and ICM at the 200-hand cap.
 
 **Environments**, alternated by table:
 1. My own tournament engine, with rule-based archetypes (rock, TAG, maniac, calling station, bluffer, push/fold) plus copies of the bot.
-2. Full Poker Gym tables against its sparring bots (TAG, LAG, short-stacker, ICM-aware, adaptive), plus heuristic and random bots standing in for naive entries.
-3. A Poker Gym **endgame** environment with only 2–3 players left, which is the phase that decides first place.
+2. Full rehearsal-simulator (Poker Gym) tables against its sparring bots (TAG, LAG, short-stacker, ICM-aware, adaptive), plus heuristic and random bots standing in for naive entries.
+3. An **endgame** environment with only 2–3 players left, which is the phase that decides first place.
 
 **Search:** each generation, mutations of the current best are played on the same fresh tables (common random numbers). A candidate must beat the incumbent by more than 1.5 standard errors and then win again on a second fresh batch before it's accepted. Wide random restarts help it escape local optima.
 
@@ -160,19 +173,19 @@ The thresholds (49 of them) are tuned by an evolution strategy that plays comple
 
 ## Development history
 
-| Stage | Change | Poker Gym points per table | vs TAG baseline |
+| Stage | Change | Points per table vs sparring bots (2,000 tables) | vs TAG baseline |
 |---|---|---|---|
 | 1–3 | Core trees, VPIP / play-safety, position; trained on own engine | – | – |
-| 4–5 | Poker Gym added as a training environment; preflop EV and postflop aggression fixes | 31.1 | −1.8 |
+| 4–5 | Rehearsal simulator (Poker Gym) added as a training environment; preflop EV and postflop aggression fixes | 31.1 | −1.8 |
 | 6–7 | **Playing to win:** short-handed range gate, heads-up fixes, endgame training | 40.9 | +8.0 |
 | 8 | Equity-based hand ranking (replacing the lumpy Chen-formula order) | 43.5 | +10.6 |
 | 9 | Heuristic and random bots added to the training field | 43.1 | +10.2 |
 
-The stage 6–7 diagnosis: the bot often finished second but rarely first. Heads-up it kept only about 25% of the chips against every Poker Gym bot, because it folded about 77% of hands preflop and stayed risk-averse when only chips were at stake. After the fixes it wins 60–63% of heads-up matches.
+The stage 6–7 diagnosis: the bot often finished second but rarely first. Heads-up it kept only about 25% of the chips against every reference bot, because it folded about 77% of hands preflop and stayed risk-averse when only chips were at stake. After the fixes it wins 60–63% of heads-up matches.
 
 ## Robustness
 
-Each row is a Poker Gym `eval` with paired seats against the TAG baseline:
+Each row is 1,000–2,000 tables in the rehearsal simulator, with paired seats against the TAG baseline:
 
 | Field / rules | Points per table | vs TAG |
 |---|---|---|
@@ -188,12 +201,12 @@ Each row is a Poker Gym `eval` with paired seats against the TAG baseline:
 
 ## Known limitations
 
-- **Random bots:** heads-up against a purely random bot it keeps only about 55% of the chips. It reads random raises as strength, and Poker Gym reveals no showdown cards for the bluff detector to learn from.
-- **Placeholder rules:** the real points table, later blind levels and poker variant are announced at the event. The model is retrained with them on the day, which takes about 10 minutes.
+- **Random bots:** heads-up against a purely random bot it keeps only about 55% of the chips. It reads random raises as strength, and the rehearsal simulator reveals no showdown cards for the bluff detector to learn from. If the official kit does reveal them, it adapts.
+- **Placeholder rules:** the real points table, later blind levels and poker variant are announced at the build phase, and the Finals variant differs again (5.2). The model is retrained with them on the day, which takes about 10 minutes.
 - **Monte Carlo refinement:** live simulation on top of the tables was tried and dropped. The gain was within noise, and some decisions went over the 1 ms limit.
 
 ---
 
-Not affiliated with Sequoia, OpenAI, Citadel Securities or Poker Gym. The bot's code is in a private repository. This overview is updated whenever the model changes.
+Not affiliated with Sequoia, OpenAI, Citadel Securities or Poker Gym. Format details come from the public rules page. The bot's code is in a private repository. This overview is updated whenever the model changes.
 
-*Last updated: 2026-11-03 (stage 9).*
+*Last updated: 2026-11-03 (stage 9; scored-tournament results added).*
