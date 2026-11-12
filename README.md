@@ -91,11 +91,12 @@ Separately, every hand has an **equity-based percentile**: the 169 starting-hand
 For each opponent the bot tracks:
 - **Preflop:** VPIP and preflop raise rate, counted only over hands where it actually saw their decision.
 - **Postflop:** aggression factor, fold-to-bet, and bluffs shown at showdown. A bet counts as a bluff when the hand was weaker than a random hand on the board *as it was when the bet was made*.
+- **Bet sizing:** how often their postflop bets are big overbets. Real players almost never size like a random bot, so random-looking sizing counts as evidence that their bets carry no information, even when no cards are ever shown.
 
 These stats drive:
 - **Play safety:** NIT / SAFE / BALANCED / LOOSE / RECKLESS, from VPIP.
 - **Style:** rock, TAG, LAG, maniac, bluffer or calling station.
-- **Ranges:** a caller holds the top VPIP%, a preflop raiser the top PFR%, and a proven bluffer's betting range widens toward any two cards.
+- **Ranges:** a caller holds the top VPIP%, a preflop raiser the top PFR%, and the betting range of a proven bluffer (or a random sizer) widens toward any two cards.
 - **Gate shifts:** the bot tightens against raises from safe players and loosens against loose ones. It steals more at tight tables and less at loose ones.
 - **Confidence:** every stat is smoothed toward a population prior until enough hands are seen. The trace reports what share of each estimate is data and what share is prior.
 
@@ -158,7 +159,7 @@ Heads-up, facing a raise with A7o. The hand tree alone would fold this, but with
 
 ## Training
 
-The thresholds (49 of them) are tuned by an evolution strategy that plays complete tournaments.
+The thresholds (50 of them) are tuned by an evolution strategy that plays complete tournaments.
 
 **Fitness:** the No Limit score itself, average points per 8-bot sit-and-go, with finishing-place points and ICM at the 200-hand cap.
 
@@ -180,8 +181,19 @@ The thresholds (49 of them) are tuned by an evolution strategy that plays comple
 | 6–7 | **Playing to win:** short-handed range gate, heads-up fixes, endgame training | 40.9 | +8.0 |
 | 8 | Equity-based hand ranking (replacing the lumpy Chen-formula order) | 43.5 | +10.6 |
 | 9 | Heuristic and random bots added to the training field | 43.1 | +10.2 |
+| 9.1 | **Random-sizing read:** overbet-heavy bettors treated as uninformative | 43.1 | +10.2 |
 
 The stage 6–7 diagnosis: the bot often finished second but rarely first. Heads-up it kept only about 25% of the chips against every reference bot, because it folded about 77% of hands preflop and stayed risk-averse when only chips were at stake. After the fixes it wins 60–63% of heads-up matches.
+
+Stage 9.1 targets the last heads-up weak spot, a purely random bot. A random bot picks its raise size uniformly up to all-in, so about 75% of its postflop bets are huge overbets; every reference bot that plays for real does that in about 2% of bets or fewer. Reading that gap fixes most of the leak without needing to see any showdown cards (1,000 heads-up matches each):
+
+| Heads-up opponent | Before | After |
+|---|---|---|
+| Random bot: share of chips at the end | 53% | **67%** |
+| Random bot: matches won | 53% | **67%** |
+| TAG, LAG, ICM, adaptive, heuristic, short-stack | 71–89% | unchanged (the read never triggers) |
+
+A paired A/B on 3,000 held-out tables in each training environment shows no change anywhere else (all within ±0.25 points). Decisions still take at most 0.15 ms.
 
 ## Robustness
 
@@ -190,7 +202,7 @@ Each row is 1,000–2,000 tables in the rehearsal simulator, with paired seats a
 | Field / rules | Points per table | vs TAG |
 |---|---|---|
 | sparring (training lineup) | 43.1 | +10.2 |
-| mixed (adds heuristic + random) | 45.8 | +9.6 |
+| mixed (adds heuristic + random) | **47.0** (was 45.8) | **+10.3** (was +9.6) |
 | 7× TAG | 44.3 | +11.9 |
 | 7× LAG | 47.0 | +9.3 |
 | weak field (call / random / heuristic) | 71.6 | +3.7 |
@@ -201,7 +213,7 @@ Each row is 1,000–2,000 tables in the rehearsal simulator, with paired seats a
 
 ## Known limitations
 
-- **Random bots:** heads-up against a purely random bot it keeps only about 55% of the chips. It reads random raises as strength, and the rehearsal simulator reveals no showdown cards for the bluff detector to learn from. If the official kit does reveal them, it adapts.
+- **Random bots:** heads-up against a purely random bot it now keeps about 67% of the chips (up from 53%; a TAG bot keeps 72%). The remaining gap is the first dozen or so hands, before the sizing read has enough bets to go on. In a real sit-and-go the bot reaches heads-up with about a hundred hands of history.
 - **Placeholder rules:** the real points table, later blind levels and poker variant are announced at the build phase, and the Finals variant differs again (5.2). The model is retrained with them on the day, which takes about 10 minutes.
 - **Monte Carlo refinement:** live simulation on top of the tables was tried and dropped. The gain was within noise, and some decisions went over the 1 ms limit.
 
@@ -209,4 +221,4 @@ Each row is 1,000–2,000 tables in the rehearsal simulator, with paired seats a
 
 Not affiliated with Sequoia, OpenAI, Citadel Securities or Poker Gym. Format details come from the public rules page. The bot's code is in a private repository. This overview is updated whenever the model changes.
 
-*Last updated: 2026-11-03 (stage 9; scored-tournament results added).*
+*Last updated: 2026-11-11 (stage 9.1: random-sizing read).*
